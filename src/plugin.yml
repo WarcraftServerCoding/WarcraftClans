@@ -1,5 +1,5 @@
 name: SimpleClans
-main: net.sacredlabyrinth.phaed.simpleclans.SimpleClans
+main: com.warcraftserver.simpleclans.SimpleClans
 version: 2.2.4
 dev-url: http://dev.bukkit.org/server-mods/simpleclans/
 softdepend: [Spout, Permissions, PermissionsBukkit, Vault, PermissionsEx, PreciousStones, mChat, mChatSuite]

@@ -1,50 +1,31 @@
 package com.warcraftserver.simpleclans.commands;
 
-import java.text.MessageFormat;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.ListIterator;
+import java.util.HashMap;
 import java.io.*;
 import java.util.logging.Logger;
-//import java.lang.reflect.ArrayList;
-import com.warcraftserver.simpleclans.ChatBlock;
 import com.warcraftserver.simpleclans.Clan;
 import com.warcraftserver.simpleclans.ClanPlayer;
-import com.warcraftserver.simpleclans.Helper;
 import com.warcraftserver.simpleclans.SimpleClans;
-import com.warcraftserver.simpleclans.managers.ClanManager;
-import com.warcraftserver.simpleclans.managers.PermissionsManager;
-import com.warcraftserver.simpleclans.managers.RequestManager;
-import com.warcraftserver.simpleclans.managers.SettingsManager;
+import com.warcraftserver.simpleclans.managers.*;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.getspout.spoutapi.SpoutManager;
-import org.getspout.spoutapi.player.SpoutPlayer;
 
 public class KOS implements ExecutorInterface
 {
     SimpleClans plugin = SimpleClans.getInstance();
     Logger log = Logger.getLogger("Minecraft");
     ClanManager manager = SimpleClans.getInstance().getClanManager();
+    HashMap<Player, String> index = new HashMap<Player, String>();
     File clans = new File("plugins/SimpleClans/clankos.txt");
-    File clanp = new File("plugins/SimpleClans/playerkos.txt");
+    KOSManager kosmanager = new KOSManager();
 
-    public String getStatus(Player cp, Player cpo){
-        Clan cpclan = manager.getClanByPlayerName(cp.getName());
-        Clan cpoclan = manager.getClanByPlayerName(cpo.getName());
-        if(cpclan.isRival(cpoclan.toString())){
-                return ", " + cpo.getName();
-            }
-        return "";
-  }
 
     @Override
     public boolean onCommand(CommandSender sender, Command paramCommand, String paramString, String[] arg) {
-        if(arg.length == 0){
+        if(arg.length > 0 ){
             Player player = null;
             if(sender instanceof Player){
                 player = (Player)sender;
@@ -54,7 +35,57 @@ public class KOS implements ExecutorInterface
             
             
             String clan = cp.getClan().getName();
-            readclanKOS(player, cp, clans);
+            if(arg[0].equalsIgnoreCase("players") || arg[0].equalsIgnoreCase("p") || arg[0].equalsIgnoreCase("player")){
+                kosmanager.readPlayerKOS(player, cp, clans, false);
+                return true;
+            }
+            if(arg[0].equalsIgnoreCase("clans") || arg[0].equalsIgnoreCase("clan") || arg[0].equalsIgnoreCase("c")){
+                kosmanager.readClanKOS(player, cp, clans);
+                return true;
+            }
+            if(arg[0].equalsIgnoreCase("more")){
+                kosmanager.readPlayerKOS(player, cp, clans, true);
+                return true;
+            }
+            if(arg[0].equalsIgnoreCase("add")){
+                if(cp.isLeader()){
+                    if(arg.length < 2){
+                         player.sendMessage("§a[§bWarCraft§a] §fNot enouch arguments.");
+                         return true;
+                    }
+                    if(arg[1].equalsIgnoreCase("clan") || arg[1].equalsIgnoreCase("c")){
+                        kosmanager.addclanKOS(player, cp, arg[0], clans, true);
+                        return true;
+                    }
+                    if(arg.length < 3){
+                         player.sendMessage("§a[§bWarCraft§a] §fNot enouch arguments.");
+                         return true;
+                    }
+                    if(arg[1].equalsIgnoreCase("player") || arg[1].equalsIgnoreCase("p")){
+                        kosmanager.addclanKOS(player, cp, arg[2], clans, false);
+                        return true;
+                    }
+                    
+                }
+                if(!cp.isLeader()){
+                    player.sendMessage("§a[§bWarCraft§a] §fYou are not a clan leader and cannot do whatever it is that you are trying to.");
+                return true;
+                }
+            }
+            if(arg[0].equalsIgnoreCase("remove")){
+                if(cp.isLeader()){
+                    if(arg.length < 2){
+                        player.sendMessage("§a[§bWarCraft§a] §fNot enouch arguments.");
+                        return true;
+                    }
+                    kosmanager.removeclanKOS(player, cp, arg[1], clans);
+                    return true;
+                }
+                if(!cp.isLeader()){
+                    player.sendMessage("§a[§bWarCraft§a] §fYou are not a clan leader and cannot do whatever it is that you are trying to.");
+                    return true;
+                }
+            }
             
             return true;}
         }
@@ -63,144 +94,18 @@ public class KOS implements ExecutorInterface
     }
 
     @Override
-    public void invalidCommand(CommandSender paramCommandSender, String paramString) {
-        paramCommandSender.sendMessage("ERROR WITH KOS COMMAND");
+    public void invalidCommand(CommandSender sender, String paramString) {
+        sender.sendMessage("§a[§bWarCraft§a] §fProper KOS usage:");
+        sender.sendMessage("    §b- §f/kos                        §aviews this help page");
+        sender.sendMessage("    §b- §f/kos players|player|p       §aviews players in kos");
+        sender.sendMessage("    §b- §f/kos clans|clan|c           §aviews clans in kos");
+        sender.sendMessage("    §b- §f/kos add clan|player <name> §aadds to list");
+        sender.sendMessage("    §b- §f/kos remove <name>          §aremoves from list");
     }
     
     
     
-    public void readclanKOS(Player player,ClanPlayer cplayer, File file){
-        String clantag = cplayer.getClan().getTag();
-        player.sendMessage("§a[§bWarCraft§a] §fYour Rivals or Kill on Sign List:");
-        player.sendMessage("  §bCLANS§a: " );
-        StringBuilder psb = new StringBuilder();
-        try{
-            BufferedReader reader = new BufferedReader(new FileReader(file));
-            String line = reader.readLine();
-            while(line != null){
-                String[] split = line.split(":");
-                if(split[0].equalsIgnoreCase(clantag)){
-                    String[] kosclans = split[1].split(",");
-                    for(int c = 0 ; c < kosclans.length ; c++){
-                        StringBuilder csb = new StringBuilder();
-                        csb.append(kosclans[c]).append("§4 - ");
-                        List<ClanPlayer> members = manager.getClan(kosclans[c]).getMembers();
-
-                        for (ClanPlayer cp : members){
-                            Player p = plugin.getServer().getPlayer(cp.getName());
-
-                            boolean isOnline = false;
-
-                            if (p != null){
-                                csb.append("§2" + p.getName());
-                            }
-                            else{
-                                csb.append("§f" + cp.getName());
-                            }
-
-
-                        }
-                        player.sendMessage(csb.toString());
-                    }
-                    String[] players = split[2].split(",");
-                    player.sendMessage("  §bPLAYERS§a: " );
-                    psb.append("  §a-");
-                    for(int p = 0 ; p < players.length ; p++){
-                        psb.append(getColor(players[p]));
-                    }
-                    player.sendMessage(psb.toString());
-                    
-                    
-                }
-                line = reader.readLine();
-            }
-            reader.close();
-        }
-        catch(IOException ex){
-            log.info("[SCAARON]" + ex.toString());
-        }
-        
-//        player.sendMessage(psb.toString());
-        
-    }
     
-    public void addKOS(String name, File file, Clan clan, Player player){
-    
-    }
-    
-    public void removeKOS(String name, File file, Clan clan, Player player){
-        
-    }
-    
-    public String getColor(ClanPlayer player){
-
-           Player p = player.toPlayer();
-            if(p != null){
-                if(p.isOnline()){
-                    return ("§2" + p.getName());
-                }
-            }
-        
-        return ("§f" + player.getName());
-    }
-    
-    public String getColor(Player player){
-            if(player != null){
-                if(player.isOnline()){
-                    return ("§2" + player.getName());
-                }
-            }
-//        }
-        return ("§f" + player.getName());
-    }
-    
-        public String getColor(String pname){
-            Player player = Bukkit.getPlayer(pname);
-            if(player != null){
-                if(player.isOnline()){
-                    return ("§2" + pname);
-                }
-            }
-//        }
-        return ("§f" + pname);
-    }
-    
-    public void addclanKOS(Player player,ClanPlayer cplayer, File file, boolean isClan){
-        String clantag = cplayer.getClan().getTag();
-        player.sendMessage("§a[§bWarCraft§a] §fYour Rivals or Kill on Sign List:");
-        player.sendMessage("  §bCLANS§a: " );
-        StringBuilder psb = new StringBuilder();
-        try{
-            BufferedReader reader = new BufferedReader(new FileReader(file));
-            String line = reader.readLine();
-            while(line != null){
-                String[] split = line.split(":");
-            }
-        }
-        catch(IOException ex){
-            log.info("[SCAARON]" + ex.toString());
-        }
-    }
-    
-    public void removeclanKOS(Player player, String variable, String name, File file, boolean isClan){
-        StringBuilder sb = new StringBuilder();
-        try{
-            BufferedReader reader = new BufferedReader(new FileReader(file));
-            String line = reader.readLine();
-            while(line != null){
-                String[] split = line.split(":");
-                if(split[0].equalsIgnoreCase(name)){
-                    if(line.contains(variable.toLowerCase())){
-                        line.replace(variable.toLowerCase(), "");
-                    }
-                }
-                sb.append(line).append("\n");
-            }
-        }
-        catch(IOException ex){
-            log.info("[SCAARON]" + ex.toString());
-        }
-    }
         
         
         
